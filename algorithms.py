@@ -158,20 +158,22 @@ def lru(pages, frames_count):
 #   - bit = 0 → thay thế page này
 # =============================================================================
 
-def second_chance(pages, frames_count):
+def second_chance(pages, frames_count, input_ref_bits=None):
     frames = []         # Các frame hiện tại
     ref_bits = []       # Reference bit tương ứng từng frame
     pointer = 0         # Con trỏ xoay vòng (kiểu đồng hồ)
     steps = []
     faults = 0
 
-    for page in pages:
-        # Page đã có trong RAM → Hit, bật reference bit
+    for i, page in enumerate(pages):
+        input_bit = input_ref_bits[i] if input_ref_bits is not None else None
+
+        # Page đã có trong RAM → Hit, cập nhật reference bit
         if page in frames:
             status = "Hit"
             victim = None
             index = frames.index(page)
-            ref_bits[index] = 1
+            ref_bits[index] = input_bit if input_bit is not None else 1
         # Page chưa có → Fault
         else:
             faults += 1
@@ -181,7 +183,7 @@ def second_chance(pages, frames_count):
             if len(frames) < frames_count:
                 victim = None
                 frames.append(page)
-                ref_bits.append(0)      # Page mới vào luôn có bit = 1
+                ref_bits.append(input_bit if input_bit is not None else 0)
             # Hết frame → duyệt vòng tìm page có bit = 0 để thay
             else:
                 # Quét: nếu bit = 1 → reset về 0, chuyển sang frame tiếp
@@ -192,7 +194,7 @@ def second_chance(pages, frames_count):
                 # Tìm được frame có bit = 0 → thay thế
                 victim = frames[pointer]
                 frames[pointer] = page
-                ref_bits[pointer] = 0   # Page mới có bit = 1
+                ref_bits[pointer] = input_bit if input_bit is not None else 0
                 pointer = (pointer + 1) % frames_count
 
         # Lưu trạng thái (bao gồm ref_bits cho Second Chance)

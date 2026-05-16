@@ -66,6 +66,12 @@ class PageReplacementGUI:
         self.entry_frames.grid(row=1, column=1, sticky="w")
         self.entry_frames.insert(0, "3")
 
+        # Reference bits cho Second Chance
+        tk.Label(frame, text="Ref bits (Second Chance):").grid(row=2, column=0, padx=5)
+        self.entry_ref_bits = tk.Entry(frame, width=50)
+        self.entry_ref_bits.grid(row=2, column=1, padx=5)
+        self.entry_ref_bits.insert(0, "1 0 1 0 0 1 0 1 0 1 0 1 0")
+
     def _create_algorithm_selector(self):
         """Nút radio chọn thuật toán."""
         self.algo_var = tk.StringVar(value="FIFO")
@@ -78,8 +84,11 @@ class PageReplacementGUI:
                 frame,
                 text=algo_name,
                 variable=self.algo_var,
-                value=algo_name
+                value=algo_name,
+                command=self._on_algorithm_changed
             ).pack(side=tk.LEFT, padx=10)
+
+        self._on_algorithm_changed()
 
     def _create_buttons(self):
         """Ba nút: Chạy từng bước, Chạy tất cả, Reset."""
@@ -156,6 +165,30 @@ class PageReplacementGUI:
                                          "- Số frame: số nguyên dương")
             return None
 
+    def _parse_ref_bits(self, pages):
+        """Đọc và kiểm tra reference bits cho Second Chance."""
+        try:
+            raw_bits = self.entry_ref_bits.get().split()
+            if not raw_bits:
+                raise ValueError("Hãy nhập ref bits cho Second Chance")
+
+            ref_bits = list(map(int, raw_bits))
+            if len(ref_bits) != len(pages):
+                raise ValueError("Số ref bit phải bằng số trang trong chuỗi")
+            if any(bit not in (0, 1) for bit in ref_bits):
+                raise ValueError("Ref bits chỉ được là 0 hoặc 1")
+
+            page_bits = {}
+            for page, bit in zip(pages, ref_bits):
+                if page in page_bits and page_bits[page] != bit:
+                    raise ValueError(f"Trang {page} có ref bit không nhất quán")
+                page_bits[page] = bit
+
+            return ref_bits
+        except ValueError as error:
+            messagebox.showerror("Lỗi", str(error))
+            return None
+
     def _run_algorithm(self):
         """
         Chạy thuật toán đã chọn, lưu kết quả vào self.steps_data.
@@ -166,10 +199,18 @@ class PageReplacementGUI:
             return False
 
         pages, frames_count = parsed
-        algorithm = ALGORITHMS[self.algo_var.get()]
+        algo_name = self.algo_var.get()
+        algorithm = ALGORITHMS[algo_name]
 
         # Chạy thuật toán, lưu kết quả
-        self.steps_data, self.total_faults = algorithm(pages, frames_count)
+        if algo_name == "Second Chance":
+            ref_bits = self._parse_ref_bits(pages)
+            if ref_bits is None:
+                return False
+            self.steps_data, self.total_faults = algorithm(pages, frames_count, ref_bits)
+        else:
+            self.steps_data, self.total_faults = algorithm(pages, frames_count)
+
         self.current_step = 0
         self.fault_count = 0
 
@@ -231,6 +272,11 @@ class PageReplacementGUI:
     # =========================================================================
     # Xử lý sự kiện nút bấm
     # =========================================================================
+
+    def _on_algorithm_changed(self):
+        """Bật ô ref bit khi chọn Second Chance."""
+        state = "normal" if self.algo_var.get() == "Second Chance" else "disabled"
+        self.entry_ref_bits.config(state=state)
 
     def _on_step(self):
         """Nút "Chạy" — hiển thị từng bước một."""
